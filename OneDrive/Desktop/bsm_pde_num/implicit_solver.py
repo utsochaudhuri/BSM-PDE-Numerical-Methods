@@ -7,6 +7,7 @@ ds=10
 dt=0.005
 K=100
 
+# Ai, Bi, Ci coefficients for implicit method
 def Calc_Ai(dt,vol,r,i):
     return -0.5*dt*((vol**2)*(i**2)-r*i)
 
