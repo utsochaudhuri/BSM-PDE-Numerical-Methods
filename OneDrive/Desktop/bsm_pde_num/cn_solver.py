@@ -13,6 +13,8 @@ rannacher_step = 2
 
 vec_vn = thomas_algo_ranna(rannacher_step)
 
+tau_n = rannacher_step * dt
+
 # Ai, Bi, Ci coefficients for CN method
 def Calc_Ai(vol,r,i):
     return 0.5*(vol**2)*i**2 - 0.5*r*i
@@ -28,13 +30,11 @@ def call_boundary(Smax, K, r, tau):
 
 ## Calculating d vector
 # Formula: (I+dt/2*Lh)Vn
-def build_d_1st_step():
+def build_d_vec(vec_vn, tau_n):
     # first interior node to the grid index i=1
     i = 1
-    a = Calc_Ai(vol, r, i)
     b = Calc_Bi(vol, r, i)
     c = Calc_Ci(vol, r, i)
-    aR = (dt/2) * a
     bR = 1 + (dt/2) * b
     cR = (dt/2) * c
     vec_d = [(bR*vec_vn[0])+(cR*vec_vn[1])]
@@ -50,7 +50,6 @@ def build_d_1st_step():
         val = (aR*vec_vn[i])+(bR*vec_vn[i+1])+(cR*vec_vn[i+2])
         vec_d.append(val)
     # final interior node (including right boundary at time level n)
-    tau_n = rannacher_step * dt
     vn_right = call_boundary(Smax, K, r, tau_n)
     idx = len(vec_vn)
     a = Calc_Ai(vol, r, idx)
@@ -63,9 +62,9 @@ def build_d_1st_step():
     return np.array(vec_d, dtype=float)
 
 # Combines the construction M matrix (I-dt/2*Lh) and finds Vn-1 as well
-def thomas_algo_cn(times):
+def thomas_algo_cn(times, vec_vn, tau_n):
     # Initial RHS from payoff at maturity
-    vec_d = build_d_1st_step()  
+    vec_d = build_d_vec(vec_vn, tau_n)  
 
     M = int(Smax/ds)
     # Interior unknown indices: i = 1..M-1  (matches vec_d length)
@@ -111,15 +110,16 @@ def thomas_algo_cn(times):
         # If another step remains, rebuild RHS for next solve:
         # vec_d := V^n (current known layer) then apply boundary correction to last entry
         if step != times - 1:
-            tau = (step + 2 + rannacher_step) * dt  # next step uses tau = 2dt, 3dt, ...
-            vec_d = x.copy()
-            V_boundary = call_boundary(Smax, K, r, tau)
+            vec_vn = x.copy()
+            tau_n += dt # next step uses tau = 3dt, 4dt, ... as rannacher has ran two loops
+            vec_d = build_d_vec(vec_vn, tau_n)
+            
+            V_boundary_at_tau_n_plus_1 = call_boundary(Smax, K, r, tau_n+dt) # plus 1 represents 1 time step ahead  
             i_last = M - 1
             c_last = Calc_Ci(vol, r, i_last)
-            cL_last = -(dt/2) * c_last
-            vec_d[-1] = vec_d[-1] - (cL_last * V_boundary)
+            vec_d[-1] += (dt/2) * c_last * V_boundary_at_tau_n_plus_1
         else:
-            vec_d = x.copy()
+            return x
     
-    vec_d = [round(val,4) for val in vec_d]
-    return vec_d
+# vec_d = [round(val,4) for val in vec_d]
+# return vec_d
