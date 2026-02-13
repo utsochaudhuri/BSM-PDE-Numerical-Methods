@@ -3,7 +3,7 @@ import math
 
 r=0.05
 vol=0.2
-ds=10
+ds=5
 dt=0.005
 K=100
 
