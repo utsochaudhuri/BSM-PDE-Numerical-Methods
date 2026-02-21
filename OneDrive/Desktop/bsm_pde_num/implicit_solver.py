@@ -4,7 +4,7 @@ import math
 r=0.05
 vol=0.2
 ds=5
-dt=0.005
+dt=0.0002*(ds**2) # dt = constant*ds^2 where constant = 0.0002
 K=100
 
 # Ai, Bi, Ci coefficients for implicit method
@@ -26,10 +26,10 @@ def payoff_call(S):
 def call_boundary(Smax, K, r, tau):
     return Smax - K * math.exp(-r * tau)
 
-def build_d_1st_step():
+def build_d_1st_step(ds, dt):
     tau = dt
     vec_d = []
-    for S in range(Smin+ds, Smax, ds):  # interior nodes only: 10..390
+    for S in np.arange(Smin + ds, Smax, ds):  # interior nodes only: 10...390
         vec_d.append(payoff_call(S))
     # boundary correction applied to LAST interior node (Smax-ds -> i = M-1)
     V_boundary = call_boundary(Smax, K, r, tau)
@@ -38,9 +38,9 @@ def build_d_1st_step():
     vec_d[-1] = vec_d[-1] - Calc_Ci(dt, vol, r, i_last) * V_boundary
     return np.array(vec_d, dtype=float)
 
-def thomas_algo_ranna(times):
+def thomas_algo_ranna(times, ds, dt):
     # Initial RHS from payoff at maturity
-    vec_d = build_d_1st_step()
+    vec_d = build_d_1st_step(ds, dt)
 
     M = int(Smax/ds)
     # Interior unknown indices: i = 1..M-1  (matches vec_d length)
@@ -49,7 +49,7 @@ def thomas_algo_ranna(times):
     for step in range(times):
         N = len(vec_d)
 
-        # --- Forward sweep ---
+        # Forward sweep
         c_dash = np.zeros(N, dtype=float)
         d_dash = np.zeros(N, dtype=float)
 
@@ -62,14 +62,14 @@ def thomas_algo_ranna(times):
             c_dash[k] = Calc_Ci(dt, vol, r, idx) / den
             d_dash[k] = (vec_d[k] - Calc_Ai(dt, vol, r, idx) * d_dash[k-1]) / den
 
-        # --- Back substitution ---
+        # Back substitution
         x = np.zeros(N, dtype=float)
         x[-1] = d_dash[-1]
         for k in range(N-2, -1, -1):
             x[k] = d_dash[k] - c_dash[k] * x[k+1]
 
         # If another step remains, rebuild RHS for next solve:
-        # vec_d := V^n (current known layer) then apply boundary correction to last entry
+        # vec_d = V^n (current known layer) then apply boundary correction to last entry
         if step != times - 1:
             tau = (step + 2) * dt  # next step uses tau = 2dt, 3dt, ...
             vec_d = x.copy()

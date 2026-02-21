@@ -2,16 +2,16 @@ import numpy as np
 import math
 from implicit_solver import thomas_algo_ranna
 r   = 0.05
-vol = 0.2
+vol = 0.2   
 ds  = 5
-dt  = 0.005
+dt  = 0.0002*(ds**2) # dt = constant*ds^2 where constant = 0.0002
 K   = 100
 
 Smin = 0 
 Smax = 400
 rannacher_step = 2
 
-vec_vn = thomas_algo_ranna(rannacher_step)
+vec_vn = thomas_algo_ranna(rannacher_step, ds, dt)
 
 tau_n = rannacher_step * dt
 
