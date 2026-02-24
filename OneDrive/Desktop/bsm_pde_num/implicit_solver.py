@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from payoff import cell_average_smoothing, quadratic_smoothing
 
 r=0.05
 vol=0.2
@@ -26,11 +27,18 @@ def payoff_call(S):
 def call_boundary(Smax, K, r, tau):
     return Smax - K * math.exp(-r * tau)
 
-def build_d_1st_step(ds, dt):
+def build_d_1st_step(ds, dt, smoothening):
     tau = dt
     vec_d = []
-    for S in np.arange(Smin + ds, Smax, ds):  # interior nodes only: 10...390
-        vec_d.append(payoff_call(S))
+    if smoothening == 0:
+        for S in np.arange(Smin + ds, Smax, ds):  # interior nodes only: 10...390
+            vec_d.append(payoff_call(S))
+    elif smoothening == 1:
+        vec_d = cell_average_smoothing(ds, K, int(round(Smax/ds))-1)
+    elif smoothening == 2:
+        vec_d = quadratic_smoothing(ds, K, int(round(Smax/ds))-1)
+    else:
+        raise ValueError("Unknown method for smoothening")
     # boundary correction applied to LAST interior node (Smax-ds -> i = M-1)
     V_boundary = call_boundary(Smax, K, r, tau)
     M = int(Smax/ds)
@@ -38,9 +46,15 @@ def build_d_1st_step(ds, dt):
     vec_d[-1] = vec_d[-1] - Calc_Ci(dt, vol, r, i_last) * V_boundary
     return np.array(vec_d, dtype=float)
 
-def thomas_algo_ranna(times, ds, dt):
+def thomas_algo_ranna(times, ds, dt, smoothening):
+    """
+    Smoothening methods:
+    0 --> No smoothening (raw payoff)
+    1 --> Cell average smoothening
+    2 --> Local quadratic smoothing
+    """
     # Initial RHS from payoff at maturity
-    vec_d = build_d_1st_step(ds, dt)
+    vec_d = build_d_1st_step(ds, dt, smoothening)
 
     M = int(Smax/ds)
     # Interior unknown indices: i = 1..M-1  (matches vec_d length)
@@ -81,8 +95,3 @@ def thomas_algo_ranna(times, ds, dt):
 
     vec_d = [round(val,4) for val in vec_d]
     return vec_d
-
-# output = thomas_algo_ranna(2)
-# a = [num for num in range(10,410,10)]
-# res = dict(zip(a,output))
-# print(res)

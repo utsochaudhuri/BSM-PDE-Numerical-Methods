@@ -11,9 +11,9 @@ Smin = 0
 Smax = 400
 rannacher_step = 2
 
-vec_vn = thomas_algo_ranna(rannacher_step, ds, dt)
 
-tau_n = rannacher_step * dt
+
+tau_n = rannacher_step * dt/2
 
 # Ai, Bi, Ci coefficients for CN method
 def Calc_Ai(vol,r,i):
@@ -30,16 +30,16 @@ def call_boundary(Smax, K, r, tau):
 
 ## Calculating d vector
 # Formula: (I+dt/2*Lh)Vn
-def build_d_vec(vec_vn, tau_n):
+def build_d_vec(vec_vn_cn, tau_n, dt):
     # first interior node to the grid index i=1
     i = 1
     b = Calc_Bi(vol, r, i)
     c = Calc_Ci(vol, r, i)
     bR = 1 + (dt/2) * b
     cR = (dt/2) * c
-    vec_d = [(bR*vec_vn[0])+(cR*vec_vn[1])] # Works under iff Smin=0
+    vec_d = [(bR*vec_vn_cn[0])+(cR*vec_vn_cn[1])] # Works under iff Smin=0
     # interior nodes i = 2 ... (N-1)
-    for i in range(len(vec_vn)-2):
+    for i in range(len(vec_vn_cn)-2):
         idx = i + 2
         a = Calc_Ai(vol, r, idx)
         b = Calc_Bi(vol, r, idx)
@@ -47,24 +47,24 @@ def build_d_vec(vec_vn, tau_n):
         aR = (dt/2) * a
         bR = 1 + (dt/2) * b
         cR = (dt/2) * c
-        val = (aR*vec_vn[i])+(bR*vec_vn[i+1])+(cR*vec_vn[i+2])
+        val = (aR*vec_vn_cn[i])+(bR*vec_vn_cn[i+1])+(cR*vec_vn_cn[i+2])
         vec_d.append(val)
     # final interior node (including right boundary at time level n)
     vn_right = call_boundary(Smax, K, r, tau_n)
-    idx = len(vec_vn)
+    idx = len(vec_vn_cn)
     a = Calc_Ai(vol, r, idx)
     b = Calc_Bi(vol, r, idx)
     c = Calc_Ci(vol, r, idx)
     aR = (dt/2) * a
     bR = 1 + (dt/2) * b
     cR = (dt/2) * c
-    vec_d.append((aR*vec_vn[-2])+(bR*vec_vn[-1])+(cR*vn_right))
+    vec_d.append((aR*vec_vn_cn[-2])+(bR*vec_vn_cn[-1])+(cR*vn_right))
     return np.array(vec_d, dtype=float)
 
 # Combines the construction M matrix (I-dt/2*Lh) and finds Vn-1 as well
-def thomas_algo_cn(times, vec_vn, tau_n):
+def thomas_algo_cn(times, vec_vn_cn, tau_n, ds, dt):
     # Initial RHS from payoff at maturity
-    vec_d = build_d_vec(vec_vn, tau_n)
+    vec_d = build_d_vec(vec_vn_cn, tau_n, dt)
 
     M = int(Smax/ds)
     # Accounting for second boundary term at tau_n+dt
@@ -116,9 +116,9 @@ def thomas_algo_cn(times, vec_vn, tau_n):
         # If another step remains, rebuild RHS for next solve:
         # vec_d := V^n (current known layer) then apply boundary correction to last entry
         if step != times - 1:
-            vec_vn = x.copy()
+            vec_vn_cn = x.copy()
             tau_n += dt # next step uses tau = 3dt, 4dt, ... as rannacher has ran two loops
-            vec_d = build_d_vec(vec_vn, tau_n)
+            vec_d = build_d_vec(vec_vn_cn, tau_n, dt)
             
             # Accounting for boundary at tau_n+dt
             V_boundary_at_tau_n_plus_1 = call_boundary(Smax, K, r, tau_n+dt) # plus 1 represents 1 time step ahead  
@@ -129,5 +129,5 @@ def thomas_algo_cn(times, vec_vn, tau_n):
             vec_out = x.copy()
     return vec_out
 
-vec_out = thomas_algo_cn(10, vec_vn, tau_n)
-print(vec_out)
+# vec_out = thomas_algo_cn(10, vec_vn_cn, tau_n, ds, dt)
+# print(vec_out)
